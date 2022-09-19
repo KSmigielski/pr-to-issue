@@ -144,7 +144,7 @@ function getCommitMessage(token, owner, repo, prNumber) {
             repo,
             prNumber
         };
-        core.debug(`Query params: ${params}`);
+        core.debug(`Query params: ${JSON.stringify(params)}`);
         // eslint-disable-next-line  @typescript-eslint/no-explicit-any
         const response = yield gh.getOctokit(token).graphql(query, params);
         const messages = response.repository.pull_request.commits.edges.map(function (edge) {

@@ -74,7 +74,7 @@ async function getCommitMessage(
     repo,
     prNumber
   }
-  core.debug(`Query params: ${params}`)
+  core.debug(`Query params: ${JSON.stringify(params)}`)
   // eslint-disable-next-line  @typescript-eslint/no-explicit-any
   const response: any = await gh.getOctokit(token).graphql(query, params)
 

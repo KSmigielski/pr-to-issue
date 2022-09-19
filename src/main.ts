@@ -73,6 +73,7 @@ async function getCommitMessage(
   // eslint-disable-next-line  @typescript-eslint/no-explicit-any
   const response: any = await gh.getOctokit(token).graphql(query, params)
 
+  core.debug(`Response: ${JSON.stringify(response)}`)
   const messages: string[] = response.repository.pull_request.commits.edges.map(
     function (edge: EdgeItem): string {
       return edge.node.commit.message

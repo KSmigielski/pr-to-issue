@@ -116,6 +116,7 @@ function run() {
 }
 function getCommitMessage(token, owner, repo, prNumber) {
     return __awaiter(this, void 0, void 0, function* () {
+        core.debug('Get commit message');
         const query = `
   query commitMessages(
     $owner: String!

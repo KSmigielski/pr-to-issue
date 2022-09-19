@@ -46,6 +46,7 @@ async function getCommitMessage(
   repo: string,
   prNumber: number
 ): Promise<string> {
+  core.debug('Get commit message')
   const query = `
   query commitMessages(
     $owner: String!

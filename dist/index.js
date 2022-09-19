@@ -118,13 +118,8 @@ function getCommitMessage(token, owner, repo, prNumber) {
     return __awaiter(this, void 0, void 0, function* () {
         core.debug('Get commit message');
         const query = `
-  query commitMessages(
-    $owner: String!
-    $repo: String!
-    $prNumber: Int!
-    $numberOfCommits: Int = 100
-  ) {
-    repository(owner: $owner, name: $owner) {
+  query commitMessages($owner: String!, $repo: String!, $prNumber: Int!, $numberOfCommits: Int = 100) {
+    repository(owner: $owner, name: $repo) {
       pullRequest(number: $prNumber) {
         commits(last: $numberOfCommits) {
           edges {

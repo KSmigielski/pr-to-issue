@@ -21,7 +21,7 @@ async function run(): Promise<void> {
       )
       return
     }
-    core.debug(JSON.stringify(gh.context.payload.pull_request))
+    core.info(`Test ${JSON.stringify(gh.context.payload.pull_request)}`)
     const newDescription = buildNewDescription(issue, prDescription)
     const response = await gh.getOctokit(token).rest.pulls.update({
       owner: gh.context.repo.owner,

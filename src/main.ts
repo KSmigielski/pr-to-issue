@@ -16,8 +16,10 @@ async function run(): Promise<void> {
     const prDescription = gh.context.payload.pull_request.body
     const issue = findIssueNumber(commitMessage)
     if (!issue) {
-      core.info('Issue is not present in last commit message. PR will not be connected to Issue.')
-      return;
+      core.info(
+        'Issue is not present in last commit message. PR will not be connected to Issue.'
+      )
+      return
     }
     const newDescription = buildNewDescription(issue, prDescription)
     const response = await gh.getOctokit(token).rest.pulls.update({

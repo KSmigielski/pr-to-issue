@@ -1,6 +1,5 @@
 import * as core from '@actions/core'
 import * as gh from '@actions/github'
-import * as exec from '@actions/exec'
 import {findIssueNumber, buildNewDescription} from './helpers'
 
 async function run(): Promise<void> {
@@ -12,7 +11,10 @@ async function run(): Promise<void> {
     if (!token) {
       throw Error('Missing github token')
     }
-    const commitMessage = await getCommitMessage()
+    const owner = gh.context.repo.owner
+    const repo = gh.context.repo.repo
+    const prNumber = gh.context.payload.pull_request.number
+    const commitMessage = await getCommitMessage(token, owner, repo, prNumber)
     const prDescription = gh.context.payload.pull_request.body
     const issue = findIssueNumber(commitMessage)
     if (!issue) {
@@ -21,7 +23,6 @@ async function run(): Promise<void> {
       )
       return
     }
-    core.info(`Test ${JSON.stringify(gh.context.payload.pull_request)}`)
     const newDescription = buildNewDescription(issue, prDescription)
     const response = await gh.getOctokit(token).rest.pulls.update({
       owner: gh.context.repo.owner,
@@ -39,17 +40,61 @@ async function run(): Promise<void> {
   }
 }
 
-async function getCommitMessage(): Promise<string> {
-  let commitMessage = ''
-  const options: exec.ExecOptions = {}
-  options.listeners = {
-    stdout: (data: Buffer) => {
-      commitMessage = data.toString()
+async function getCommitMessage(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<string> {
+  const query = `
+  query commitMessages(
+    $owner: String!
+    $repo: String!
+    $prNumber: Int!
+    $numberOfCommits: Int = 100
+  ) {
+    repository(owner: $owner, name: $owner) {
+      pullRequest(number: $prNumber) {
+        commits(last: $numberOfCommits) {
+          edges {
+            node {
+              commit {
+                message
+              }
+            }
+          }
+        }
+      }
     }
   }
-  await exec.exec('git log -1 --pretty=%B', [], options)
-  core.debug(`Commit message: ${commitMessage}`)
-  return commitMessage
+  `
+  const params = {
+    owner,
+    repo,
+    prNumber
+  }
+
+  // eslint-disable-next-line  @typescript-eslint/no-explicit-any
+  const response: any = await gh.getOctokit(token).graphql(query, params)
+
+  const messages: string[] = response.repository.pull_request.commits.edges.map(
+    function (edge: EdgeItem): string {
+      return edge.node.commit.message
+    }
+  )
+  if (messages.length === 0) {
+    throw Error('Missing commits in PR')
+  } else {
+    return messages[messages.length - 1]
+  }
+}
+
+interface EdgeItem {
+  node: {
+    commit: {
+      message: string
+    }
+  }
 }
 
 run()

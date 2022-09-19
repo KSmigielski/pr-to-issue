@@ -47,6 +47,7 @@ async function getCommitMessage(): Promise<string> {
     }
   }
   await exec.exec('git log -1 --pretty=%B', [], options)
+  core.debug(`Commit message: ${commitMessage}`)
   return commitMessage
 }
 

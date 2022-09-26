@@ -1,16 +1,7 @@
 export function findIssueNumber(message: string): string | undefined {
   const parts = message.split(' ')
-  const sameRepoRegex = new RegExp('^#\\d+$', 'g')
-  const externalRepoRegex = new RegExp(`^[\\w\\-]+/[\\w\\-]+/#\\d+$`, 'g')
-  for (const part of parts) {
-    if (sameRepoRegex.test(part)) {
-      return part
-    }
-    if (externalRepoRegex.test(part)) {
-      return part
-    }
-  }
-  return undefined
+  const regex = new RegExp(`^${issueRegex}$`, 'g')
+  return parts.find(part => regex.test(part))
 }
 
 export function buildNewDescription(
@@ -18,8 +9,28 @@ export function buildNewDescription(
   descirption: string | undefined
 ): string {
   if (descirption && descirption !== '') {
+    for (const keyword of closeKewords) {
+      const regex = new RegExp(`${keyword} ${issueRegex}`, 'gi')
+      if (regex.test(descirption)) {
+        return descirption
+      }
+    }
     return `${descirption}\r\n\r\nResolve ${issue}`
   } else {
     return `Resolve ${issue}`
   }
 }
+
+const issueRegex = '(([\\w\\-]+/){2}|)#\\d+'
+
+const closeKewords = [
+  'close',
+  'closes',
+  'closed',
+  'fix',
+  'fixes',
+  'fixed',
+  'resolve',
+  'resolves',
+  'resolved'
+]

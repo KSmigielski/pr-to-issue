@@ -10,21 +10,18 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.buildNewDescription = exports.findIssueNumber = void 0;
 function findIssueNumber(message) {
     const parts = message.split(' ');
-    const sameRepoRegex = new RegExp('^#\\d+$', 'g');
-    const externalRepoRegex = new RegExp(`^[\\w\\-]+/[\\w\\-]+/#\\d+$`, 'g');
-    for (const part of parts) {
-        if (sameRepoRegex.test(part)) {
-            return part;
-        }
-        if (externalRepoRegex.test(part)) {
-            return part;
-        }
-    }
-    return undefined;
+    const regex = new RegExp(`^${issueRegex}$`, 'g');
+    return parts.find(part => regex.test(part));
 }
 exports.findIssueNumber = findIssueNumber;
 function buildNewDescription(issue, descirption) {
     if (descirption && descirption !== '') {
+        for (const keyword of closeKewords) {
+            const regex = new RegExp(`${keyword} ${issueRegex}`, 'gi');
+            if (regex.test(descirption)) {
+                return descirption;
+            }
+        }
         return `${descirption}\r\n\r\nResolve ${issue}`;
     }
     else {
@@ -32,6 +29,18 @@ function buildNewDescription(issue, descirption) {
     }
 }
 exports.buildNewDescription = buildNewDescription;
+const issueRegex = '(([\\w\\-]+/){2}|)#\\d+';
+const closeKewords = [
+    'close',
+    'closes',
+    'closed',
+    'fix',
+    'fixes',
+    'fixed',
+    'resolve',
+    'resolves',
+    'resolved'
+];
 
 
 /***/ }),
@@ -80,6 +89,9 @@ const helpers_1 = __nccwpck_require__(5008);
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
+            if (gh.context.actor === 'dependabot[bot]') {
+                core.info('Skipping for dependabot pull requests');
+            }
             if (!gh.context.payload.pull_request) {
                 throw Error('This action is applicable only to PRs');
             }
@@ -90,11 +102,14 @@ function run() {
             const owner = gh.context.repo.owner;
             const repo = gh.context.repo.repo;
             const prNumber = gh.context.payload.pull_request.number;
-            const commitMessage = yield getCommitMessage(token, owner, repo, prNumber);
+            const commitMessages = yield getCommitMessages(token, owner, repo, prNumber);
             const prDescription = gh.context.payload.pull_request.body;
-            const issue = (0, helpers_1.findIssueNumber)(commitMessage);
+            const issues = commitMessages.map(message => (0, helpers_1.findIssueNumber)(message));
+            if (issues.some(issue => issue === undefined)) {
+                throw Error('Issue is not present in at least one commit message');
+            }
+            const issue = issues[issues.length - 1];
             if (!issue) {
-                core.info('Issue is not present in last commit message. PR will not be connected to Issue.');
                 return;
             }
             const newDescription = (0, helpers_1.buildNewDescription)(issue, prDescription);
@@ -114,9 +129,9 @@ function run() {
         }
     });
 }
-function getCommitMessage(token, owner, repo, prNumber) {
+function getCommitMessages(token, owner, repo, prNumber) {
     return __awaiter(this, void 0, void 0, function* () {
-        core.debug('Get commit message');
+        core.debug('-> Get commit message');
         const query = `
   query commitMessages($owner: String!, $repo: String!, $prNumber: Int!, $numberOfCommits: Int = 100) {
     repository(owner: $owner, name: $repo) {
@@ -146,11 +161,12 @@ function getCommitMessage(token, owner, repo, prNumber) {
         const messages = response.repository.pullRequest.commits.edges.map(function (edge) {
             return edge.node.commit.message;
         });
+        core.debug('-< Get commit message');
         if (messages.length === 0) {
             throw Error('Missing commits in PR');
         }
         else {
-            return messages[messages.length - 1];
+            return messages;
         }
     });
 }

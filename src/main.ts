@@ -1,10 +1,13 @@
 import * as core from '@actions/core'
 import * as gh from '@actions/github'
-import * as exec from '@actions/exec'
 import {findIssueNumber, buildNewDescription} from './helpers'
 
 async function run(): Promise<void> {
   try {
+    if (gh.context.actor === 'dependabot[bot]') {
+      core.info('Skipping for dependabot pull requests')
+    }
+
     if (!gh.context.payload.pull_request) {
       throw Error('This action is applicable only to PRs')
     }
@@ -12,13 +15,17 @@ async function run(): Promise<void> {
     if (!token) {
       throw Error('Missing github token')
     }
-    const commitMessage = await getCommitMessage()
+    const owner = gh.context.repo.owner
+    const repo = gh.context.repo.repo
+    const prNumber = gh.context.payload.pull_request.number
+    const commitMessages = await getCommitMessages(token, owner, repo, prNumber)
     const prDescription = gh.context.payload.pull_request.body
-    const issue = findIssueNumber(commitMessage)
+    const issues = commitMessages.map(message => findIssueNumber(message))
+    if (issues.some(issue => issue === undefined)) {
+      throw Error('Issue is not present in at least one commit message')
+    }
+    const issue = issues[issues.length - 1]
     if (!issue) {
-      core.info(
-        'Issue is not present in last commit message. PR will not be connected to Issue.'
-      )
       return
     }
     const newDescription = buildNewDescription(issue, prDescription)
@@ -38,16 +45,59 @@ async function run(): Promise<void> {
   }
 }
 
-async function getCommitMessage(): Promise<string> {
-  let commitMessage = ''
-  const options: exec.ExecOptions = {}
-  options.listeners = {
-    stdout: (data: Buffer) => {
-      commitMessage = data.toString()
+async function getCommitMessages(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<string[]> {
+  core.debug('-> Get commit message')
+  const query = `
+  query commitMessages($owner: String!, $repo: String!, $prNumber: Int!, $numberOfCommits: Int = 100) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $prNumber) {
+        commits(last: $numberOfCommits) {
+          edges {
+            node {
+              commit {
+                message
+              }
+            }
+          }
+        }
+      }
     }
   }
-  await exec.exec('git log -1 --pretty=%B', [], options)
-  return commitMessage
+  `
+  const params = {
+    owner,
+    repo,
+    prNumber
+  }
+  core.debug(`Query params: ${JSON.stringify(params)}`)
+  // eslint-disable-next-line  @typescript-eslint/no-explicit-any
+  const response: any = await gh.getOctokit(token).graphql(query, params)
+
+  core.debug(`Response: ${JSON.stringify(response)}`)
+  const messages: string[] = response.repository.pullRequest.commits.edges.map(
+    function (edge: EdgeItem): string {
+      return edge.node.commit.message
+    }
+  )
+  core.debug('-< Get commit message')
+  if (messages.length === 0) {
+    throw Error('Missing commits in PR')
+  } else {
+    return messages
+  }
+}
+
+interface EdgeItem {
+  node: {
+    commit: {
+      message: string
+    }
+  }
 }
 
 run()
